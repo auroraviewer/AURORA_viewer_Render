@@ -34,13 +34,27 @@
   .field > label {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
   }
-  select, input[type=search], input[type=range] {
+  select, input[type=text], input[type=range] {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
     border-radius: 6px; padding: 6px 9px; font-size: 13px; min-width: 150px;
   }
-  input[type=search] { min-width: 210px; }
   input[type=range] { min-width: 120px; padding: 0; }
   select:focus, input:focus { outline: 2px solid #3b5bdb; }
+  #geneField { position: relative; }
+  .geneRow { display: flex; gap: 4px; align-items: center; }
+  .geneRow input { flex: 1; min-width: 190px; }
+  .geneRow button {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 11px; cursor: pointer; font-size: 13px;
+  }
+  #geneListBox {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 30;
+    min-width: 260px; max-height: 340px; overflow-y: auto;
+    background: #141821; border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.55); margin-top: 4px;
+  }
+  #geneListBox .geneItem { padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--muted); }
+  #geneListBox .geneItem:hover { background: #232a37; color: #fff; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button {
     background: var(--panel-2); color: var(--muted); border: 0;
@@ -127,8 +141,11 @@
 
   <div class="field" id="geneField">
     <label for="geneSearch">Gene</label>
-    <input id="geneSearch" type="search" list="geneList" placeholder="type to search" autocomplete="off" spellcheck="false" />
-    <datalist id="geneList"></datalist>
+    <div class="geneRow">
+      <input id="geneSearch" type="text" placeholder="type to search" autocomplete="off" spellcheck="false" />
+      <button id="geneBtn" type="button" title="Show all genes">&#9660;</button>
+    </div>
+    <div id="geneListBox"></div>
   </div>
 
   <div class="field">
@@ -143,11 +160,6 @@
       <option value="viridis">viridis</option>
       <option value="gray">gray</option>
     </select>
-  </div>
-
-  <div class="field">
-    <label for="opacity">Prediction opacity</label>
-    <input id="opacity" type="range" min="10" max="100" value="100" />
   </div>
 
   <button class="primary" id="renderBtn">Render</button>

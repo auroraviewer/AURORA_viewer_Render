@@ -37,8 +37,8 @@ try {
   check('app.js parses', false, e.message);
 }
 
-const IDS = ['sampleSel', 'geneSearch', 'geneList',
-             'geneField', 'resSeg', 'cmapSel', 'opacity',
+const IDS = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
+             'geneField', 'resSeg', 'cmapSel',
              'renderBtn', 'stage', 'heCanvas', 'predCanvas', 'spinner', 'loadMsg',
              'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
              'timingInfo', 'backendInfo', 'heNote'];

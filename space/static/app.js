@@ -20,7 +20,6 @@
     gene: null,
     cell: 14,
     cmap: 'turbo',
-    opacity: 1.0,
     meta: null,
     layer: null,           // current layer descriptor
     bitmap: null,          // decoded prediction PNG
@@ -36,8 +35,8 @@
   // a mock DOM and fails if one is missing, or if start-up throws at all - the
   // failure mode being guarded against is a page that loads and then silently
   // does nothing.
-  var ids = ['sampleSel', 'geneSearch', 'geneList',
-             'geneField', 'resSeg', 'cmapSel', 'opacity', 'renderBtn', 'stage',
+  var ids = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
+             'geneField', 'resSeg', 'cmapSel', 'renderBtn', 'stage',
              'heCanvas', 'predCanvas', 'spinner', 'loadMsg', 'status',
              'ramp', 'legendTitle', 'legendCaption', 'metaInfo', 'timingInfo',
              'backendInfo', 'heNote'];
@@ -129,7 +128,7 @@
 
     var cam = state.camera;
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-    ctx.globalAlpha = isHE ? 1 : state.opacity;
+    ctx.globalAlpha = 1;
 
     if (isHE) {
       // The H&E sits at the world origin and spans its native pixel size.
@@ -277,14 +276,7 @@
     status('Reading ' + id + '\u2026');
     return api('/api/samples/' + encodeURIComponent(id) + '/meta').then(function (m) {
       state.meta = m;
-
-      // gene + cell-type pickers
-      els.geneList.innerHTML = '';
-      var frag = document.createDocumentFragment();
-      m.genes.forEach(function (g) {
-        var o = document.createElement('option'); o.value = g; frag.appendChild(o);
-      });
-      els.geneList.appendChild(frag);
+      els.geneListBox.style.display = 'none';
 
       // resolutions
       els.resSeg.innerHTML = '';
@@ -501,11 +493,56 @@
       if (state.bitmap) { buildValues(state.bitmap); drawAll(); }
       updateLegend(); updateUrl();
     });
-    els.opacity.addEventListener('input', function () {
-      state.opacity = parseInt(els.opacity.value, 10) / 100;
-      drawAll();
-    });
     els.renderBtn.addEventListener('click', function () { setWorld(); render(false); });
+
+    // ---- gene picker: type to search, or open the full list ----
+    function geneListVisible() { return els.geneListBox.style.display === 'block'; }
+    function hideGeneList() { els.geneListBox.style.display = 'none'; }
+    function pickGene(g) {
+      state.gene = g;
+      els.geneSearch.value = g;
+      hideGeneList();
+      status('');
+      render(true);
+    }
+    function renderGeneList(filter) {
+      var genes = state.meta ? state.meta.genes : [];
+      var q = (filter || '').trim().toLowerCase();
+      var list = q ? genes.filter(function (g) { return g.toLowerCase().indexOf(q) >= 0; })
+                   : genes;
+      var MAX = 300;
+      els.geneListBox.innerHTML = '';
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < Math.min(list.length, MAX); i++) {
+        (function (g) {
+          var d = document.createElement('div');
+          d.className = 'geneItem';
+          d.textContent = g;
+          d.addEventListener('click', function () { pickGene(g); });
+          frag.appendChild(d);
+        })(list[i]);
+      }
+      if (list.length > MAX) {
+        var more = document.createElement('div');
+        more.className = 'geneItem';
+        more.textContent = '\u2026 ' + (list.length - MAX) + ' more \u2014 keep typing to narrow';
+        frag.appendChild(more);
+      }
+      els.geneListBox.appendChild(frag);
+    }
+    els.geneBtn.addEventListener('click', function () {
+      if (geneListVisible()) { hideGeneList(); return; }
+      renderGeneList(els.geneSearch.value);
+      els.geneListBox.style.display = 'block';
+    });
+    document.addEventListener('click', function (e) {
+      if (geneListVisible()
+          && e.target !== els.geneBtn
+          && e.target !== els.geneSearch
+          && !els.geneListBox.contains(e.target)) {
+        hideGeneList();
+      }
+    });
 
     var timer = null;
     function commitGene() {
@@ -515,13 +552,14 @@
         status('Unknown gene "' + v + '" - pick one from the list.', true);
         return;
       }
-      status(''); state.gene = v; render(true);
+      status(''); state.gene = v; hideGeneList(); render(true);
     }
     els.geneSearch.addEventListener('change', commitGene);
     els.geneSearch.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); commitGene(); }
     });
     els.geneSearch.addEventListener('input', function () {
+      if (geneListVisible()) renderGeneList(els.geneSearch.value);
       clearTimeout(timer);
       timer = setTimeout(function () {
         var v = els.geneSearch.value.trim();
@@ -558,7 +596,6 @@
     attachPanZoom(els.heCanvas);
     attachPanZoom(els.predCanvas);
     els.cmapSel.value = state.cmap;
-    els.opacity.value = String(Math.round(state.opacity * 100));
     wire();
     api('/api/health').then(function (h) {
       els.backendInfo.textContent = (h.backend === 'hf' ? 'Hugging Face (on demand)'
