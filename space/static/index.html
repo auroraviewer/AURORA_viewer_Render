@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AURORA &middot; H&amp;E and Gene Expression Viewer</title>
+<style>
+  :root {
+    --bg: #0d0f14; --panel: #161a22; --panel-2: #1e2430; --line: #2a3140;
+    --text: #e6e9ef; --muted: #9aa4b6; --accent: #b7bdf7; --warn: #ffcf70;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 9px 18px;
+    background: #11141a; border-bottom: 1px solid var(--line); flex: none;
+  }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header .grow { flex: 1; }
+  a { color: var(--accent); }
+
+  #controls {
+    display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end;
+    padding: 10px 18px; background: var(--panel);
+    border-bottom: 1px solid var(--line); flex: none;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
+  }
+  select, input[type=search], input[type=range] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 9px; font-size: 13px; min-width: 150px;
+  }
+  input[type=search] { min-width: 210px; }
+  input[type=range] { min-width: 120px; padding: 0; }
+  select:focus, input:focus { outline: 2px solid #3b5bdb; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    background: var(--panel-2); color: var(--muted); border: 0;
+    padding: 6px 13px; font-size: 13px; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed=true] { background: #2b3a67; color: #fff; }
+  button.primary {
+    background: #2b3a67; color: #fff; border: 1px solid #3b5bdb;
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+  }
+
+  #stage { flex: 1; min-height: 0; display: flex; }
+  .panel { position: relative; flex: 1; min-width: 0; border-right: 1px solid var(--line); }
+  .panel:last-child { border-right: 0; }
+  .panel canvas { position: absolute; inset: 0; display: block; cursor: grab; touch-action: none; }
+  .panel .tag {
+    position: absolute; left: 10px; top: 8px; z-index: 3; font-size: 11px;
+    letter-spacing: .5px; text-transform: uppercase; color: var(--muted);
+    background: rgba(13,15,20,.72); padding: 3px 8px; border-radius: 5px;
+  }
+  .panel .note {
+    position: absolute; right: 10px; top: 8px; z-index: 3; font-size: 11px;
+    color: var(--warn); background: rgba(13,15,20,.72);
+    padding: 3px 8px; border-radius: 5px;
+  }
+
+  #legend {
+    position: absolute; right: 14px; bottom: 14px; z-index: 5; width: 218px;
+    background: rgba(13,15,20,.88); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  #legend .title {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  #ramp { width: 100%; height: 12px; display: block; border-radius: 3px; border: 1px solid #000; }
+  #legend .row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  #legend .caption { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  #spinner {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 7;
+    width: 32px; height: 32px; border: 3px solid #333c4d; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .8s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+  #status {
+    position: absolute; left: 14px; bottom: 14px; z-index: 6; max-width: 60%;
+    background: rgba(13,15,20,.88); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 11px; font-size: 12px; color: var(--muted); display: none;
+  }
+  #status.error { color: #ffb4b4; border-color: #6b2b2b; }
+
+  footer {
+    flex: none; padding: 5px 18px; font-size: 11px; color: var(--muted);
+    background: #11141a; border-top: 1px solid var(--line);
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="/static/logo.png" alt="" style="height:34px;width:52px" onerror="this.style.display='none'" />
+  <div>
+    <h1>AURORA &middot; H&amp;E and Gene Expression Viewer</h1>
+    <div class="sub">Decoded on demand from the prediction files &mdash; no pre-rendered images</div>
+  </div>
+  <div class="grow"></div>
+  <div class="sub" id="backendInfo"></div>
+</header>
+
+<div id="controls">
+  <div class="field">
+    <label for="sampleSel">Sample</label>
+    <select id="sampleSel"></select>
+  </div>
+
+  <div class="field">
+    <label for="kindSel">Show</label>
+    <select id="kindSel">
+      <option value="gene">Gene expression</option>
+      <option value="celltype">Cell-type proportion</option>
+    </select>
+  </div>
+
+  <div class="field" id="geneField">
+    <label for="geneSearch">Gene</label>
+    <input id="geneSearch" type="search" list="geneList" placeholder="type to search" autocomplete="off" spellcheck="false" />
+    <datalist id="geneList"></datalist>
+  </div>
+
+  <div class="field" id="celltypeField" style="display:none">
+    <label for="celltypeSel">Cell type</label>
+    <select id="celltypeSel"></select>
+  </div>
+
+  <div class="field">
+    <label>Resolution</label>
+    <div class="seg" id="resSeg"></div>
+  </div>
+
+  <div class="field">
+    <label for="cmapSel">Colormap</label>
+    <select id="cmapSel">
+      <option value="turbo">turbo</option>
+      <option value="viridis">viridis</option>
+      <option value="gray">gray</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="opacity">Prediction opacity</label>
+    <input id="opacity" type="range" min="10" max="100" value="100" />
+  </div>
+
+  <button class="primary" id="renderBtn">Render</button>
+</div>
+
+<div id="stage">
+  <div class="panel">
+    <canvas id="heCanvas"></canvas>
+    <div class="tag">H&amp;E</div>
+    <div class="note" id="heNote"></div>
+  </div>
+  <div class="panel">
+    <canvas id="predCanvas"></canvas>
+    <div class="tag">Prediction</div>
+  </div>
+
+  <div id="spinner"></div>
+  <div id="status"></div>
+  <div id="legend">
+    <div class="title" id="legendTitle">Predicted expression</div>
+    <canvas id="ramp" width="200" height="12"></canvas>
+    <div class="row"><span>low</span><span>high</span></div>
+    <div class="caption" id="legendCaption">&nbsp;</div>
+  </div>
+</div>
+
+<footer>
+  <span id="metaInfo">&nbsp;</span>
+  <span id="timingInfo"></span>
+  <span>drag to pan &middot; wheel to zoom &middot; panels stay in sync &middot; <b>f</b> fit &middot; <b>n</b>/<b>p</b> next/previous gene</span>
+</footer>
+
+<script src="/static/colormaps.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

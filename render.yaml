@@ -1,0 +1,34 @@
+# Render Blueprint: deploys the AURORA viewer from space/.
+#
+# Connect this GitHub repo to Render and it reads this file automatically
+# (Render "Blueprint" deploy).  The app is CPU-only and streams predictions and
+# the H&E straight from the Hugging Face dataset, so it needs no GPU and no
+# bundled data.
+services:
+  - type: web
+    name: aurora-viewer
+    runtime: docker
+    rootDir: space
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: AURORA_BACKEND
+        value: hf
+      - key: AURORA_HF_REPO
+        value: AURORAData/AURORA_Viewer_test
+      # empty on purpose: it overrides the Dockerfile default so the viewer
+      # discovers both predictions_7um_28um/ and predictions_112um/ recursively
+      - key: AURORA_HF_SUBFOLDER
+        value: ""
+      - key: AURORA_HE_REPO
+        value: AURORAData/AURORA_Viewer_test
+      - key: AURORA_HE_SUBFOLDER
+        value: HE_image
+      # Prefetch downloads each sample once so views after the first are fast.
+      # On the free tier the disk is ephemeral and wiped on sleep, so this
+      # re-downloads ~1.8 GB after each wake.  If you hit disk-full errors, set
+      # this to 0 (stream from HF instead; the first gene of a cold view is slow).
+      - key: AURORA_PREFETCH
+        value: "1"

@@ -1,0 +1,18 @@
+# The app streams predictions and H&E from Hugging Face, so none of this is
+# bundled into the deploy.  Keep the Git repo small.
+*.h5
+*.tif
+*.tiff
+*_pyramid/
+TCGA-*.png
+
+# development scratch / evidence
+_*.png
+_evidence*.png
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+h5py>=3.10
+numpy>=1.26
+pillow>=10.0
+imagecodecs>=2023.9.18
+numcodecs>=0.12
+huggingface_hub>=0.23
+requests>=2.31
