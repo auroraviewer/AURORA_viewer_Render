@@ -37,11 +37,11 @@ try {
   check('app.js parses', false, e.message);
 }
 
-const IDS = ['sampleSel', 'kindSel', 'geneSearch', 'geneList', 'celltypeSel',
-             'celltypeField', 'geneField', 'resSeg', 'cmapSel', 'opacity',
-             'renderBtn', 'stage', 'heCanvas', 'predCanvas', 'spinner', 'status',
-             'ramp', 'legendTitle', 'legendCaption', 'metaInfo', 'timingInfo',
-             'backendInfo', 'heNote'];
+const IDS = ['sampleSel', 'geneSearch', 'geneList',
+             'geneField', 'resSeg', 'cmapSel', 'opacity',
+             'renderBtn', 'stage', 'heCanvas', 'predCanvas', 'spinner', 'loadMsg',
+             'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
+             'timingInfo', 'backendInfo', 'heNote'];
 const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
 for (const id of IDS) {
   check(`index.html defines #${id}`, html.indexOf('id="' + id + '"') >= 0);
@@ -52,7 +52,6 @@ for (const id of IDS) {
 
 // ---- the important behaviours ---------------------------------------------
 check('app.js fetches /api/gene.png', appSrc.indexOf('/api/gene.png') >= 0);
-check('app.js fetches /api/celltype.png', appSrc.indexOf('/api/celltype.png') >= 0);
 check('app.js builds the H&E URL from the sample meta',
   appSrc.indexOf('he.url') >= 0 && appSrc.indexOf('state.meta.he') >= 0);
 check('both canvases share one camera object',
@@ -65,8 +64,8 @@ check('the background is made transparent from the presence channel',
   /px\[i \+ 2\]/.test(appSrc) && /px\[i \+ 3\] = 0/.test(appSrc));
 check('no hatch or quality overlay is drawn any more',
   appSrc.indexOf('buildHatch') < 0 && appSrc.indexOf('qualityWarn') < 0);
-check('gene and cell-type modes toggle their own pickers',
-  appSrc.indexOf('geneField') >= 0 && appSrc.indexOf('celltypeField') >= 0);
+check('cell types are not offered (the prop decode overflows the tiny host)',
+  appSrc.indexOf('celltype') < 0 && appSrc.indexOf('kindSel') < 0);
 
 // ---- reproduce buildValues on synthetic data ------------------------------
 // RGB, as the server sends it: R = value code, B = presence.

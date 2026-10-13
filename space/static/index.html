@@ -87,6 +87,12 @@
     border-radius: 50%; animation: spin .8s linear infinite; display: none;
   }
   @keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+  #loadMsg {
+    position: absolute; left: 50%; top: calc(50% + 28px); transform: translateX(-50%);
+    z-index: 7; text-align: center; max-width: 72%; padding: 12px 18px;
+    background: rgba(13,15,20,.92); border: 1px solid var(--line); border-radius: 8px;
+    font-size: 13px; line-height: 1.5; color: var(--muted); display: none;
+  }
   #status {
     position: absolute; left: 14px; bottom: 14px; z-index: 6; max-width: 60%;
     background: rgba(13,15,20,.88); border: 1px solid var(--line);
@@ -119,23 +125,10 @@
     <select id="sampleSel"></select>
   </div>
 
-  <div class="field">
-    <label for="kindSel">Show</label>
-    <select id="kindSel">
-      <option value="gene">Gene expression</option>
-      <option value="celltype">Cell-type proportion</option>
-    </select>
-  </div>
-
   <div class="field" id="geneField">
     <label for="geneSearch">Gene</label>
     <input id="geneSearch" type="search" list="geneList" placeholder="type to search" autocomplete="off" spellcheck="false" />
     <datalist id="geneList"></datalist>
-  </div>
-
-  <div class="field" id="celltypeField" style="display:none">
-    <label for="celltypeSel">Cell type</label>
-    <select id="celltypeSel"></select>
   </div>
 
   <div class="field">
@@ -172,6 +165,7 @@
   </div>
 
   <div id="spinner"></div>
+  <div id="loadMsg"></div>
   <div id="status"></div>
   <div id="legend">
     <div class="title" id="legendTitle">Predicted expression</div>

@@ -7,7 +7,7 @@ title: AURORA H&E + Gene Expression Viewer
 # AURORA H&E + Gene Expression Viewer
 
 Interactive viewer for AURORA high-resolution gene-expression predictions.
-Pick a **sample**, a **gene** (or a **cell type**) and a **resolution**; the
+Pick a **sample**, a **gene** and a **resolution**; the
 heatmap is decoded on demand from the original prediction files and shown next to
 the H&E image with **synchronised pan and zoom**. No images are pre-generated.
 
@@ -20,8 +20,8 @@ the H&E image with **synchronised pan and zoom**. No images are pre-generated.
 | 1 | 28 µm broken, bottom part a mess | **Root-caused and fixed - it was a decoder bug, not the data.** A partially written final HDF5 chunk keeps the *physical* row stride, and the decoder reshaped it by the *logical* extent, so every gene after the first in the final block read padding as values. `test_partial_chunk.py` verifies the decode against the native h5py read. The prediction files are correct as written. |
 | 2 | H&E side by side + synced zoom | **Implemented and verified** against a real matched pair. `AURORA_HE_DIR` finds `<sample_id>_rescaled.tif` automatically; alignment scores IoU 0.79 (7 µm) / 0.78 (28 µm) / 0.98 (112 µm). See [HE_FORMAT.md](../HE_FORMAT.md) for the storage recommendation. |
 | 3 | 112 µm predictions | **Implemented.** Different schema, handled by the same reader; all three resolutions appear as buttons. See [DATA_REFERENCE.md](../DATA_REFERENCE.md). |
-| 4 | Cell-type visualisation | **Implemented** — a "Show" selector switches between gene expression and cell-type proportion. Each cell type is stretched over the range it occupies so the map uses the whole colormap, with the real proportions quoted in the legend. |
-| 5 | No list of genes / cell types | **Implemented** — searchable gene picker and a cell-type dropdown, both read from the file. Note gene counts (3000/3002) and cell-type names differ between samples, so nothing is hard-coded. |
+| 4 | Cell-type visualisation | **Removed from the UI.** Decoding the cell-type proportions needs a softmax over the whole patch array and overflowed the 512 MB limit of a free hosting instance. The backend endpoints remain, but the picker is gone so nothing decodes that data. |
+| 5 | No list of genes / cell types | **Implemented** — searchable gene picker read from the file. Gene counts differ between samples (3000/3002), so nothing is hard-coded. |
 
 A rendering bug was also found and fixed: prediction code `0` (real zero
 expression) was drawn as background, which made low-expression regions look

@@ -95,10 +95,8 @@ troubleshooting section, in
 ## Controls
 
 * **Sample** - every prediction file found in the configured location.
-* **Show** - gene expression, or cell-type proportion.
 * **Gene** - type to search; the list is read from the file, so it always matches
   the predictions that exist (counts differ between samples: 3000 vs 3002).
-* **Cell type** - a plain dropdown; names come from the file.
 * **Resolution** - `7 um` (14 px cells), `28 um` (56 px) or `112 um` (224 px).
 * **Colormap** - turbo (the historical choice), viridis, or gray.
 

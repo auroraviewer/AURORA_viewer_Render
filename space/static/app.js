@@ -18,8 +18,6 @@
   var state = {
     sample: null,
     gene: null,
-    celltype: null,
-    kind: 'gene',          // 'gene' | 'celltype'
     cell: 14,
     cmap: 'turbo',
     opacity: 1.0,
@@ -38,9 +36,9 @@
   // a mock DOM and fails if one is missing, or if start-up throws at all - the
   // failure mode being guarded against is a page that loads and then silently
   // does nothing.
-  var ids = ['sampleSel', 'kindSel', 'geneSearch', 'geneList', 'celltypeSel', 'celltypeField',
+  var ids = ['sampleSel', 'geneSearch', 'geneList',
              'geneField', 'resSeg', 'cmapSel', 'opacity', 'renderBtn', 'stage',
-             'heCanvas', 'predCanvas', 'spinner', 'status',
+             'heCanvas', 'predCanvas', 'spinner', 'loadMsg', 'status',
              'ramp', 'legendTitle', 'legendCaption', 'metaInfo', 'timingInfo',
              'backendInfo', 'heNote'];
 
@@ -56,7 +54,15 @@
       return r.json();
     });
   }
-  function busy(on) { els.spinner.style.display = on ? 'block' : 'none'; }
+  function busy(on, msg) {
+    els.spinner.style.display = on ? 'block' : 'none';
+    if (on && msg) {
+      els.loadMsg.textContent = msg;
+      els.loadMsg.style.display = 'block';
+    } else {
+      els.loadMsg.style.display = 'none';
+    }
+  }
   function status(msg, err) {
     if (!msg) { els.status.style.display = 'none'; return; }
     els.status.textContent = msg;
@@ -265,7 +271,10 @@
 
   function selectSample(id, restore) {
     state.sample = id;
-    busy(true); status('Reading ' + id + '\u2026');
+    busy(true, 'Loading sample data \u2014 the first load downloads it from '
+      + 'Hugging Face and can take a minute or two. After that, switching genes '
+      + 'and resolutions is fast.');
+    status('Reading ' + id + '\u2026');
     return api('/api/samples/' + encodeURIComponent(id) + '/meta').then(function (m) {
       state.meta = m;
 
@@ -276,12 +285,6 @@
         var o = document.createElement('option'); o.value = g; frag.appendChild(o);
       });
       els.geneList.appendChild(frag);
-
-      els.celltypeSel.innerHTML = '';
-      m.cell_types.forEach(function (c) {
-        var o = document.createElement('option'); o.value = c; o.textContent = c;
-        els.celltypeSel.appendChild(o);
-      });
 
       // resolutions
       els.resSeg.innerHTML = '';
@@ -302,9 +305,6 @@
         ? restore.gene : m.genes[0];
       els.geneSearch.value = gene;
       state.gene = gene;
-      state.celltype = m.cell_types[0];
-      els.celltypeSel.value = state.celltype;
-      if (restore && restore.kind) setKind(restore.kind, true);
       if (restore && restore.cmap) { state.cmap = restore.cmap; els.cmapSel.value = restore.cmap; }
 
       setWorld();
@@ -402,24 +402,13 @@
     });
   }
 
-  function setKind(kind, silent) {
-    state.kind = kind;
-    els.kindSel.value = kind;
-    els.geneField.style.display = kind === 'gene' ? '' : 'none';
-    els.celltypeField.style.display = kind === 'celltype' ? '' : 'none';
-    if (!silent) render(false);
-  }
-
   function render(keepView) {
     if (!state.sample) return;
-    var name = state.kind === 'gene' ? state.gene : state.celltype;
+    var name = state.gene;
     if (!name) return;
-    var url = (state.kind === 'gene'
-      ? '/api/gene.png?sample=' + encodeURIComponent(state.sample)
+    var url = '/api/gene.png?sample=' + encodeURIComponent(state.sample)
         + '&gene=' + encodeURIComponent(name)
-      : '/api/celltype.png?sample=' + encodeURIComponent(state.sample)
-        + '&celltype=' + encodeURIComponent(name))
-      + '&cell=' + state.cell + '&width=2080';
+        + '&cell=' + state.cell + '&width=2080';
 
     busy(true);
     status('Rendering ' + name + ' at ' + (currentLayer() ? currentLayer().microns : '?') + ' \u00b5m\u2026');
@@ -428,7 +417,7 @@
     // ask where this view sits in image-pixel space, in parallel with the image
     var statsUrl = '/api/view/stats?sample=' + encodeURIComponent(state.sample)
       + '&name=' + encodeURIComponent(name)
-      + '&kind=' + state.kind + '&cell=' + state.cell + '&width=2080';
+      + '&kind=gene&cell=' + state.cell + '&width=2080';
 
     var img = new Image();
     var pending = 2;
@@ -467,26 +456,12 @@
 
   function updateLegend() {
     CM.drawRamp(els.ramp, state.cmap);
-    var name = state.kind === 'gene' ? state.gene : state.celltype;
+    var name = state.gene;
     var ri = state.renderInfo;
-    if (state.kind === 'gene') {
-      els.legendTitle.textContent = 'Predicted expression';
-    } else {
-      els.legendTitle.textContent = 'Cell-type proportion';
-    }
+    els.legendTitle.textContent = 'Predicted expression';
     var L = currentLayer();
-    var extra = '';
-    if (state.kind === 'celltype' && ri && ri.raw_lo != null && ri.raw_hi != null) {
-      // colour is the raw probability, stretched over the range this cell type
-      // actually occupies; quote those real numbers so the colours are readable
-      extra = ' \u00b7 ' + (100 * ri.raw_lo).toFixed(1) + '% to '
-            + (100 * ri.raw_hi).toFixed(1) + '% of cells';
-    } else if (state.kind === 'celltype') {
-      extra = ' \u00b7 fraction of cells';
-    }
     els.legendCaption.textContent = name
-      + (L ? ' \u00b7 ' + L.microns + ' \u00b5m' : '')
-      + extra;
+      + (L ? ' \u00b7 ' + L.microns + ' \u00b5m' : '');
   }
 
   function updateMetaLine() {
@@ -501,9 +476,7 @@
   // ---------------------------------------------------- url
   function updateUrl() {
     var h = '#sample=' + encodeURIComponent(state.sample)
-      + '&kind=' + state.kind
-      + (state.kind === 'gene' ? '&gene=' + encodeURIComponent(state.gene)
-                               : '&celltype=' + encodeURIComponent(state.celltype))
+      + '&gene=' + encodeURIComponent(state.gene)
       + '&cell=' + state.cell + '&cmap=' + state.cmap;
     if (history.replaceState) history.replaceState(null, '', h);
   }
@@ -517,17 +490,12 @@
     });
     if (out.cell) state.cell = parseInt(out.cell, 10) || 14;
     if (out.cmap) state.cmap = out.cmap;
-    if (out.kind) state.kind = out.kind;
     return out;
   }
 
   // ---------------------------------------------------- wiring
   function wire() {
     els.sampleSel.addEventListener('change', function () { selectSample(els.sampleSel.value, null); });
-    els.kindSel.addEventListener('change', function () { setKind(els.kindSel.value); });
-    els.celltypeSel.addEventListener('change', function () {
-      state.celltype = els.celltypeSel.value; render(true);
-    });
     els.cmapSel.addEventListener('change', function () {
       state.cmap = els.cmapSel.value;
       if (state.bitmap) { buildValues(state.bitmap); drawAll(); }
@@ -563,7 +531,7 @@
 
     document.addEventListener('keydown', function (e) {
       if (document.activeElement === els.geneSearch) return;
-      if (!state.meta || state.kind !== 'gene') return;
+      if (!state.meta) return;
       if (e.key === 'ArrowRight' || e.key === 'n') step(1);
       else if (e.key === 'ArrowLeft' || e.key === 'p') step(-1);
       else if (e.key === 'f') { setWorld(); drawAll(); }
