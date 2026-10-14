@@ -23,6 +23,7 @@ the presence mask, which made "expression 0" and "no data" indistinguishable.
 from __future__ import annotations
 
 import io
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -228,13 +229,16 @@ def render_view(layer, kind: str, index: int, target_w: int = TARGET_WIDTH):
 class ViewerCache:
     """One open prediction file plus cached rasters and encoded PNGs."""
 
-    def __init__(self, store=None, max_pngs: int = 64, max_meta: int = 24):
+    def __init__(self, store=None, max_pngs: int | None = None, max_meta: int = 24):
         self.store = store
         self._lock = threading.RLock()
         self._sample_id: str | None = None
         self._h5: AuroraPredictions | None = None
         self._pngs: OrderedDict = OrderedDict()
-        self._max_pngs = max_pngs
+        # small on purpose: PNGs are ~200-500 KB each and a 512 MB host has no
+        # room for 64 of them; exact repeats still hit the cache
+        self._max_pngs = int(max_pngs if max_pngs is not None
+                             else os.environ.get("AURORA_PNG_CACHE", "16"))
         self._meta: OrderedDict = OrderedDict()
         self._max_meta = max_meta
         self.stats = {"requests": 0, "png_hits": 0, "renders": 0,

@@ -28,6 +28,7 @@ on-disk formats are documented in ``../DATA_REFERENCE.md``.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 
@@ -118,9 +119,15 @@ def _render(kind: str, sample: str, name: str, cell_px: int, width: int):
 
 
 def _image_response(request: Request, png: bytes, info: dict, tag: str):
-    etag = f'"{tag}"'
+    # ETag is the CONTENT hash, not the URL.  An earlier version keyed the ETag
+    # on sample|cell|gene|width, so after the lattice code was fixed the browser
+    # kept serving the stale PNG it had cached (max-age was 86400) for any gene
+    # viewed before the fix - which looked exactly like "EPCAM is broken but
+    # TMSB4X is fine".  Hashing the bytes makes any change to the render produce
+    # a new ETag, and a short max-age bounds how long a stale copy can live.
+    etag = '"' + hashlib.sha256(png).hexdigest() + '"'
     headers = {
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "public, max-age=300",
         "ETag": etag,
         "X-Render-Ms": str(int((info.get("raster_seconds", 0)
                                 + info.get("png_seconds", 0)) * 1000)),

@@ -88,8 +88,12 @@ def _decode_chunk(raw: bytes, chain) -> bytes:
     return out
 
 
-CACHE_MAX_ENTRIES = 96
-CACHE_MAX_BYTES = 512 * 1024 * 1024
+CACHE_MAX_ENTRIES = 64
+# The shared decode cache only holds small 1-D arrays (gene maxima etc.); the
+# big per-gene chunk slices are deliberately NOT cached (see read_array) because
+# a full channel block is 4 MB and a few views used to accumulate ~390 MB, which
+# is fatal on a 512 MB host.  The PNG cache in viewer_core covers exact repeats.
+CACHE_MAX_BYTES = int(os.environ.get("AURORA_DECODE_CACHE_MB", "32")) << 20
 
 
 def _cache_bytes(cache):
@@ -204,6 +208,12 @@ def read_array(dset, rows=None, cols=None, cache=None) -> np.ndarray:
     a0, a1 = c0 < shape[0], c1 < shape[1]
     row_blocks = np.unique(r_idx // c0) if a0 else np.array([0])
     col_blocks = np.unique(c_idx // c1) if a1 else np.array([0])
+    # 2-D reads are never written to the shared chunk cache: a single-gene view
+    # still decodes whole channel blocks (256 x 16384 = 4 MB each), and caching
+    # those pushed memory past 390 MB on a 512 MB host for almost no reuse (the
+    # request-specific slice is what's needed, and exact repeats are already
+    # covered by the PNG cache).  Higher-level caches (patch_loc, grid) memoise
+    # the expensive full reads themselves.
     for rb in row_blocks:
         rmask = (r_idx // c0) == rb if a0 else np.ones(r_idx.size, bool)
         r_local = r_idx[rmask] - rb * c0 if a0 else r_idx[rmask]
@@ -213,7 +223,7 @@ def read_array(dset, rows=None, cols=None, cache=None) -> np.ndarray:
             arr = _chunk(dset, chain,
                          int(rb * c0) if a0 else 0,
                          int(cb * c1) if a1 else 0,
-                         view, store)
+                         {}, False)
             out[np.ix_(rmask, cmask)] = arr[np.ix_(r_local, c_local)]
     return out
 
