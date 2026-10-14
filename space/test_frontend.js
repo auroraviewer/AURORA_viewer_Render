@@ -39,8 +39,8 @@ try {
 
 const IDS = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
              'geneField', 'resSeg', 'cmapSel',
-             'renderBtn', 'stage', 'heCanvas', 'predCanvas', 'spinner', 'loadMsg',
-             'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
+             'renderBtn', 'stage', 'warn28', 'heCanvas', 'predCanvas', 'spinner',
+             'loadMsg', 'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
              'timingInfo', 'backendInfo', 'heNote'];
 const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
 for (const id of IDS) {

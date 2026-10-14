@@ -18,6 +18,7 @@
   var state = {
     sample: null,
     gene: null,
+    catalog: [],          // gene list loaded from LUAD_gene.csv (fallback: H5 genes)
     cell: 14,
     cmap: 'turbo',
     meta: null,
@@ -36,7 +37,7 @@
   // failure mode being guarded against is a page that loads and then silently
   // does nothing.
   var ids = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
-             'geneField', 'resSeg', 'cmapSel', 'renderBtn', 'stage',
+             'geneField', 'resSeg', 'cmapSel', 'renderBtn', 'stage', 'warn28',
              'heCanvas', 'predCanvas', 'spinner', 'loadMsg', 'status',
              'ramp', 'legendTitle', 'legendCaption', 'metaInfo', 'timingInfo',
              'backendInfo', 'heNote'];
@@ -61,6 +62,31 @@
     } else {
       els.loadMsg.style.display = 'none';
     }
+  }
+  // ---- gene catalog -----------------------------------------------------
+  function parseGeneCSV(text) {
+    var out = [];
+    (text || '').replace(/^\uFEFF/, '').split(/\r?\n/).forEach(function (line) {
+      var parts = line.split(',');
+      if (parts.length < 2) return;
+      var g = parts[1].trim();
+      if (!g || g === 'Genes') return;
+      out.push(g);
+    });
+    return out;
+  }
+  function catalogGenes() {
+    if (state.catalog && state.catalog.length) return state.catalog;
+    return state.meta ? state.meta.genes : [];
+  }
+  function inSample(g) {
+    return !!(state.meta && state.meta.genes.indexOf(g) >= 0);
+  }
+  function availGenes() {
+    var out = [];
+    catalogGenes().forEach(function (g) { if (inSample(g)) out.push(g); });
+    if (out.length) return out;
+    return state.meta ? state.meta.genes : [];
   }
   function status(msg, err) {
     if (!msg) { els.status.style.display = 'none'; return; }
@@ -292,9 +318,10 @@
         state.cell = m.layers[0].cell_px;
       }
       syncResButtons();
+      updateWarn28();
 
-      var gene = (restore && restore.gene && m.genes.indexOf(restore.gene) >= 0)
-        ? restore.gene : m.genes[0];
+      var gene = (restore && restore.gene && inSample(restore.gene))
+        ? restore.gene : (availGenes()[0] || m.genes[0]);
       els.geneSearch.value = gene;
       state.gene = gene;
       if (restore && restore.cmap) { state.cmap = restore.cmap; els.cmapSel.value = restore.cmap; }
@@ -383,8 +410,13 @@
     if (state.cell === cell) return;
     state.cell = cell;
     syncResButtons();
+    updateWarn28();
     setWorld();
     render(true);
+  }
+
+  function updateWarn28() {
+    els.warn28.style.display = (state.cell === 56) ? 'block' : 'none';
   }
 
   function syncResButtons() {
@@ -499,6 +531,10 @@
     function geneListVisible() { return els.geneListBox.style.display === 'block'; }
     function hideGeneList() { els.geneListBox.style.display = 'none'; }
     function pickGene(g) {
+      if (!inSample(g)) {
+        status('Gene "' + g + '" is not present in this sample\u2019s predictions.', true);
+        return;
+      }
       state.gene = g;
       els.geneSearch.value = g;
       hideGeneList();
@@ -506,17 +542,31 @@
       render(true);
     }
     function renderGeneList(filter) {
-      var genes = state.meta ? state.meta.genes : [];
+      var genes = catalogGenes();
       var q = (filter || '').trim().toLowerCase();
-      var list = q ? genes.filter(function (g) { return g.toLowerCase().indexOf(q) >= 0; })
-                   : genes;
+      var filtering = q.length > 0;
+      var list = filtering ? genes.filter(function (g) { return g.toLowerCase().indexOf(q) >= 0; })
+                           : genes;
       var MAX = 300;
       els.geneListBox.innerHTML = '';
       var frag = document.createDocumentFragment();
+      if (filtering) {
+        // a filtered list may collapse to one gene; always offer the full list
+        var all = document.createElement('div');
+        all.className = 'geneItem all';
+        all.textContent = 'Show all genes';
+        all.addEventListener('click', function (e) {
+          e.stopPropagation();          // the rebuild detaches this node; keep
+          renderGeneList('');           // the list open after it
+        });
+        frag.appendChild(all);
+      }
       for (var i = 0; i < Math.min(list.length, MAX); i++) {
         (function (g) {
+          var ok = inSample(g);
           var d = document.createElement('div');
-          d.className = 'geneItem';
+          d.className = ok ? 'geneItem' : 'geneItem off';
+          d.title = ok ? '' : 'Not present in this sample\u2019s predictions';
           d.textContent = g;
           d.addEventListener('click', function () { pickGene(g); });
           frag.appendChild(d);
@@ -548,8 +598,8 @@
     function commitGene() {
       var v = els.geneSearch.value.trim();
       if (!v || !state.meta) return;
-      if (state.meta.genes.indexOf(v) < 0) {
-        status('Unknown gene "' + v + '" - pick one from the list.', true);
+      if (!inSample(v)) {
+        status('Gene "' + v + '" is not present in this sample\u2019s predictions.', true);
         return;
       }
       status(''); state.gene = v; hideGeneList(); render(true);
@@ -563,7 +613,7 @@
       clearTimeout(timer);
       timer = setTimeout(function () {
         var v = els.geneSearch.value.trim();
-        if (state.meta && state.meta.genes.indexOf(v) >= 0 && v !== state.gene) commitGene();
+        if (state.meta && inSample(v) && v !== state.gene) commitGene();
       }, 220);
     });
 
@@ -583,7 +633,7 @@
   }
 
   function step(d) {
-    var g = state.meta.genes;
+    var g = availGenes();
     var i = g.indexOf(state.gene);
     if (i < 0) i = 0;
     state.gene = g[(i + d + g.length) % g.length];
@@ -597,6 +647,16 @@
     attachPanZoom(els.predCanvas);
     els.cmapSel.value = state.cmap;
     wire();
+    // the LUAD gene list used for the picker; the sample's own genes remain the
+    // source of truth for what can actually be rendered
+    fetch('/static/LUAD_gene.csv').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (txt) {
+      state.catalog = parseGeneCSV(txt);
+    }).catch(function () {
+      state.catalog = [];
+    });
     api('/api/health').then(function (h) {
       els.backendInfo.textContent = (h.backend === 'hf' ? 'Hugging Face (on demand)'
         : 'local files')
