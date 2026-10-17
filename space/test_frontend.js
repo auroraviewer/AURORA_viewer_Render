@@ -61,14 +61,16 @@ check('both canvases share one camera object',
 check('the camera transform is applied to both panels in one function',
   /function drawAll\(\)[\s\S]{0,200}drawPanel\(els\.heCanvas/.test(appSrc) &&
   /drawAll\(\)[\s\S]{0,200}drawPanel\(els\.predCanvas/.test(appSrc));
-check('the background is made transparent from the presence channel',
-  /px\[i \+ 2\]/.test(appSrc) && /px\[i \+ 3\] = 0/.test(appSrc));
+check('cells without a patch are painted white inside the raster',
+  /px\[i \+ 2\]/.test(appSrc) &&
+  /px\[i\] = 255; px\[i \+ 1\] = 255; px\[i \+ 2\] = 255/.test(appSrc));
 check('no hatch or quality overlay is drawn any more',
   appSrc.indexOf('buildHatch') < 0 && appSrc.indexOf('qualityWarn') < 0);
 check('cell types are not offered (the prop decode overflows the tiny host)',
   appSrc.indexOf('celltype') < 0 && appSrc.indexOf('kindSel') < 0);
-check('the prediction panel background is white, the H&E matte stays dark',
-  /fillStyle = isHE \? '#000' : '#ffffff'/.test(appSrc));
+check('the panel matte around the raster stays dark',
+  appSrc.indexOf("ctx.fillStyle = '#000';") >= 0
+  && appSrc.indexOf(": '#ffffff'") < 0);
 check('a scale bar is drawn on the H&E panel from the 0.5 um/px grid',
   appSrc.indexOf('drawScaleBar(') >= 0 &&
   appSrc.indexOf('UM_PER_WORLD_PX = 0.5') >= 0);
@@ -117,7 +119,7 @@ function buildValues(px, name) {
       out[i] = lut[o]; out[i + 1] = lut[o + 1];
       out[i + 2] = lut[o + 2]; out[i + 3] = 255;
     } else {
-      out[i + 3] = 0;            // no patch -> genuinely transparent
+      out[i] = 255; out[i + 1] = 255; out[i + 2] = 255; out[i + 3] = 255;  // white
     }
   }
   return out;
@@ -127,15 +129,16 @@ const codes = new Uint8Array([0, 10, 128, 255, 0, 200, 50, 90]);
 const presence = new Uint8Array([1, 1, 1, 1, 1, 1, 1, 0]);   // last cell has no patch
 const out = buildValues(makeRGB(codes, presence, 4, 2), 'turbo');
 
-check('a present cell with code 0 gets the colormap low end, not transparency',
+check('a present cell with code 0 gets the colormap low end, not white',
   out[0] === turbo[0] && out[3] === 255, [out[0], out[1], out[2], out[3]].join(','));
 check('the last code maps to the colormap high end',
   out[3 * 4] === turbo[765] && out[3 * 4 + 1] === turbo[766]);
 check('present cells are opaque', out[3] === 255 && out[4 * 4 + 3] === 255);
-check('a cell with no patch is fully transparent', out[7 * 4 + 3] === 0,
-  out[7 * 4 + 3]);
-check('an empty raster is fully transparent',
-  buildValues(makeRGB(codes, new Uint8Array(8), 4, 2), 'turbo')[3] === 0);
+check('a cell with no patch is opaque white', out[7 * 4 + 3] === 255
+  && out[7 * 4] === 255 && out[7 * 4 + 1] === 255 && out[7 * 4 + 2] === 255,
+  [out[7 * 4], out[7 * 4 + 1], out[7 * 4 + 2], out[7 * 4 + 3]].join(','));
+check('an empty raster is opaque white',
+  buildValues(makeRGB(codes, new Uint8Array(8), 4, 2), 'turbo')[3] === 255);
 
 console.log();
 if (failures) {

@@ -7,8 +7,8 @@
  * is why changing gene or colormap never needs a new server-side artefact.
  *
  * The server sends an RGB PNG: R is the value code and B presence.  Presence 0
- * becomes transparent, so areas with no patch show the page through rather than
- * a rectangle of near-black.
+ * is painted white, so the missing points inside the prediction plot match the
+ * H&E's white glass; the panel matte around the raster stays dark.
  */
 (function () {
   'use strict';
@@ -225,10 +225,10 @@
     var ctx = cv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = state.camera.scale < 1;
-    // The prediction raster is transparent where there is no patch, so the panel
-    // background IS the "no data" colour.  White matches the reference figures;
-    // the H&E keeps a dark matte so the slide's own white glass stands out.
-    ctx.fillStyle = isHE ? '#000' : '#ffffff';
+    // Dark matte behind both panels; it is only visible outside the drawn
+    // content.  Inside the prediction raster, cells with no patch are painted
+    // white (see buildValues), so the covered area reads like the H&E's glass.
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, cv.width, cv.height);
 
     if (isHE && !bmp) {
@@ -404,10 +404,11 @@
     var lut = CM.lut(state.cmap);
 
     // The server sends RGB: R is the value code, B is presence.
-    //   * presence 0  -> alpha 0, so "no patch" is genuinely transparent and the
-    //     panel shows through instead of a rectangle of near-black.
+    //   * presence 0  -> painted WHITE: the missing points inside the prediction
+    //     plot then look like the H&E's white glass, so the two panels read the
+    //     same way.  (The panel matte outside the raster stays dark.)
     //   * presence 255 -> the value is mapped through the colormap, so a real
-    //     expression of 0 gets the colormap's low colour, not transparency.
+    //     expression of 0 gets the colormap's low colour, not white.
     for (var i = 0; i < px.length; i += 4) {
       var present = px[i + 2];
       if (present) {
@@ -415,7 +416,7 @@
         px[i] = lut[o]; px[i + 1] = lut[o + 1]; px[i + 2] = lut[o + 2];
         px[i + 3] = 255;
       } else {
-        px[i + 3] = 0;
+        px[i] = 255; px[i + 1] = 255; px[i + 2] = 255; px[i + 3] = 255;
       }
     }
     ctx.putImageData(data, 0, 0);

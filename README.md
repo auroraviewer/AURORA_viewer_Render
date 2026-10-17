@@ -114,8 +114,9 @@ so a view can be linked or reloaded.
 
 The H&E panel carries a **scale bar** that updates with the zoom (the slide is
 0.5 µm per pixel, so the bar reads µm at fit zoom and switches to mm when zoomed
-out). The prediction panel's background is white, so "no patch" cells read as
-blank canvas rather than a dark hole.
+out). Inside the prediction raster, cells with no patch are painted **white**, so
+the missing points look like the H&E's white glass; the dark matte remains only
+around the raster itself.
 
 ---
 

@@ -10,8 +10,8 @@ The renderer produces **two** rasters per view:
                  patch exists.  The browser maps this through the colormap, so
                  an expression of 0 is drawn as the colormap's low end, *not* as
                  background.
-* ``presence`` - uint8, 255 where a patch exists, 0 otherwise.  This is what
-                 makes "no patch" transparent in the browser.
+* ``presence`` - uint8, 255 where a patch exists, 0 otherwise.  The client paints
+                 those cells white, so missing points look like the H&E's glass.
 
 Values are drawn exactly as stored.  Nothing is masked, hatched or annotated:
 whatever the file contains is what appears.
@@ -73,9 +73,9 @@ def _png_rgb(values: np.ndarray, presence: np.ndarray) -> bytes:
     ``R`` value     the expression (or proportion) code, 0-255
     ``B`` presence  255 where a patch exists, 0 where there is no tissue
 
-    The presence channel is what makes "no patch" genuinely transparent.  Without
+    The presence channel is what lets the client paint "no patch" white.  Without
     it the client cannot tell background from a legitimate expression of 0, and
-    the raster is drawn as a rectangle of near-black over the whole image.
+    missing points would be indistinguishable from real zeros.
 
     Values are shown exactly as stored.  No cell is masked, hatched or otherwise
     annotated: whatever the file contains is what gets drawn.
@@ -157,9 +157,8 @@ def render_view(layer, kind: str, index: int, target_w: int = TARGET_WIDTH):
         unit[flat] = unit_flat
         unit = unit.reshape(H, W)
 
-    # presence: 255 where a patch exists, 0 where there is no tissue.  This is
-    # what makes the background of the prediction transparent rather than being
-    # confused with a legitimate expression of 0.
+    # presence: 255 where a patch exists, 0 where there is no tissue.  The client
+    # paints 0 white, keeping it distinct from a legitimate expression of 0.
     presence = np.zeros(W * H, dtype=np.uint8)
     presence[flat] = 255
     presence = presence.reshape(H, W)

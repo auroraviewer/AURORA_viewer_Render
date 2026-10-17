@@ -292,11 +292,11 @@ round-trips through the server. The channels are:
 | `R` | the value code, 0-255 |
 | `B` | presence: 255 where a patch exists, 0 where there is none |
 
-Presence is what makes "no patch" transparent: without it the client cannot tell
-background from a legitimate expression of 0. The prediction panel is painted
-**white**, so those cells read as blank canvas (matching the reference figures)
-while a present cell with value 0 draws the colormap's low colour. Values are
-drawn exactly as stored —
+Presence is what separates "no patch" from a legitimate expression of 0: without
+it the client cannot tell background from data. Cells with no patch are painted
+**white inside the raster** — so the missing points look like the H&E's white
+glass — while a present cell with value 0 draws the colormap's low colour. The
+dark matte remains only around the raster. Values are drawn exactly as stored —
 nothing is masked, hatched or annotated.
 
 ## Tests
