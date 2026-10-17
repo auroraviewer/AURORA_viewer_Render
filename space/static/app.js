@@ -607,8 +607,12 @@
 
     var img = new Image();
     var pending = 2;
+    var tok = state.loadToken;      // sample the render belongs to
     function done() {
       if (--pending > 0) return;
+      // if the user switched samples while this render was in flight, leave the
+      // loading panel alone: the new sample's download owns it now
+      if (tok !== state.loadToken) return;
       if (!keepView) { setWorld(); } else { clampCamera(); }
       drawAll();
       busy(false); status('');

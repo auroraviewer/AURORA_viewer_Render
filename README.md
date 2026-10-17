@@ -118,6 +118,11 @@ out). Inside the prediction raster, cells with no patch are painted **white**, s
 the missing points look like the H&E's white glass; the dark matte remains only
 around the raster itself.
 
+When a sample has to be downloaded (`AURORA_PREFETCH=1`), the loading panel keeps
+its warning message and adds a **progress bar** showing the file being fetched and
+its percentage. The same panel appears when switching samples in the picker; a
+sample that is already on disk opens without it.
+
 ---
 
 ## How the data is read
