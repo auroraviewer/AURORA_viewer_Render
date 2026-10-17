@@ -73,7 +73,11 @@ Against the Hub (see the hosting note in the repository README):
 ```powershell
 $env:AURORA_BACKEND    = 'hf'
 $env:AURORA_HF_REPO    = 'AURORAData/AURORA_prediction'
-$env:AURORA_HF_SUBFOLDER = 'predictions_7um_28um/TCGA_LUAD'
+# two folders: 112 um predictions and 7/28 um predictions (merged by sample id)
+$env:AURORA_HF_SUBFOLDER = 'TCGA_LUAD_website,predictions_7um_28um/TCGA_LUAD'
+$env:AURORA_HE_REPO    = 'AURORAData/AURORA_prediction'
+$env:AURORA_HE_SUBFOLDER = 'HE_image_website'
+$env:AURORA_DEFAULT_SAMPLE = 'TCGA-44-5645-01B-04-BS4'
 $env:AURORA_PREFETCH   = '1'      # strongly recommended, see below
 python -m uvicorn app:app --port 7860
 ```
@@ -189,6 +193,12 @@ real images are to hand.
 
 | Variable | Meaning |
 | --- | --- |
+| `AURORA_BACKEND` | `local` or `hf` |
+| `AURORA_LOCAL_DIR` | folder holding the prediction `.h5` files (local backend) |
+| `AURORA_HF_REPO` | Hugging Face **dataset** repo holding the predictions |
+| `AURORA_HF_SUBFOLDER` | folder(s) inside that repo — **comma-separated** for more than one |
+| `AURORA_DEFAULT_SAMPLE` | sample the UI opens on load (default `TCGA-44-5645-01B-04-BS4`) |
+| `AURORA_PREFETCH` | `1` downloads each sample once, then serves it locally |
 | `AURORA_HE_DIR` | folder scanned recursively for `<sample_id>[suffix][ext]` |
 | `AURORA_HE_REPO` | Hugging Face **dataset** repo to fetch images from |
 | `AURORA_HE_SUBFOLDER` | folder inside that repo |

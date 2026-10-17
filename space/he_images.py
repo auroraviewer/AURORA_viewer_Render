@@ -164,6 +164,19 @@ class HEImageStore:
                     "image_size": pyr["native"],
                     "pyramid": True,
                 }
+            # same for a local pyramid: read its manifest (or infer from the
+            # level name) so a pyramid alone is enough - no giant flat file needed
+            ldir = self.pyramid_dir(sample_id)
+            if ldir:
+                native = self._pyramid_native(ldir)
+                return {
+                    "available": True,
+                    "placeholder": False,
+                    "basename": os.path.basename(ldir),
+                    "url": f"/api/he/{sample_id}",
+                    "image_size": native,
+                    "pyramid": True,
+                }
             return {"available": False,
                     "hint": "set AURORA_HE_DIR (or AURORA_HE_PLACEHOLDER) to enable "
                             "the side-by-side H&E view"}
@@ -234,6 +247,37 @@ class HEImageStore:
                 continue
         out.sort()
         return out
+
+    def _pyramid_native(self, directory: str) -> list[int] | None:
+        """
+        Native image size in prediction pixels, from a pyramid directory.
+
+        Prefers ``manifest.json`` (``{"size": [width, height]}``); otherwise it
+        infers from the finest level's name: ``L<k>`` is the native image halved
+        ``k`` times, so native = level * 2**k.  The batch converter writes the
+        manifest, making the inference a fallback only.
+        """
+        mf = os.path.join(directory, "manifest.json")
+        if os.path.exists(mf):
+            try:
+                with open(mf, "r", encoding="utf-8") as fh:
+                    size = json.load(fh).get("size")
+                if isinstance(size, (list, tuple)) and len(size) == 2:
+                    return [int(size[0]), int(size[1])]
+            except Exception:
+                pass
+        levels = self._pyramid_levels(directory)
+        if not levels:
+            return None
+        w, path = levels[-1]                     # widest = finest = least halved
+        m = re.match(r"L(\d+)", os.path.basename(path))
+        k = int(m.group(1)) if m else 0
+        try:
+            with Image.open(path) as im:
+                h = im.height
+        except Exception:
+            h = 0
+        return [w * (2 ** k), h * (2 ** k)]
 
     def serve_pyramid(self, directory: str, max_width: int) -> Response | None:
         """

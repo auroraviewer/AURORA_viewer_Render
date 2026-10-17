@@ -288,7 +288,9 @@
       });
       var h = readHash();
       var want = (h.sample && d.samples.some(function (s) { return s.sample_id === h.sample; }))
-        ? h.sample : d.samples[0].sample_id;
+        ? h.sample
+        : (d.default && d.samples.some(function (s) { return s.sample_id === d.default; })
+            ? d.default : d.samples[0].sample_id);
       els.sampleSel.value = want;
       return selectSample(want, h);
     }).catch(function (e) { status('Cannot list samples: ' + e.message, true); });

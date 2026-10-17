@@ -119,7 +119,13 @@ class SampleStore:
             local = os.path.abspath(local)
         self.local_dir = local
         self.repo_id = repo_id or os.environ.get("AURORA_HF_REPO")
-        self.subfolder = (subfolder or os.environ.get("AURORA_HF_SUBFOLDER") or "").strip("/")
+        # One or more comma-separated folders inside the repo.  The predictions
+        # may be split (e.g. the 112 um files in one folder and the 7/28 um files
+        # in another), so each is searched recursively and the results merged by
+        # sample id.  An empty value searches the whole repo.
+        raw = subfolder if subfolder is not None else os.environ.get("AURORA_HF_SUBFOLDER", "")
+        self.subfolders = [s.strip("/") for s in (raw or "").split(",") if s.strip("/")]
+        self.subfolder = ",".join(self.subfolders)      # kept for reporting
         self.revision = revision or os.environ.get("AURORA_HF_REVISION") or None
         self.block_size = int(block_size or os.environ.get("AURORA_HF_BLOCK") or 8 << 20)
         self.prefetch = os.environ.get("AURORA_PREFETCH") == "1"
@@ -141,7 +147,7 @@ class SampleStore:
     def _repo_root(self) -> str:
         if not self.repo_id:
             raise RuntimeError("AURORA_HF_REPO is not set")
-        return f"datasets/{self.repo_id}" + (f"/{self.subfolder}" if self.subfolder else "")
+        return f"datasets/{self.repo_id}"
 
     @staticmethod
     def _sample_id(filename: str) -> str:
@@ -186,13 +192,18 @@ class SampleStore:
         fs = self._filesystem()
         root = self._repo_root()
         grouped: dict[str, list[str]] = {}
-        for p in fs.find(root):
-            if not p.endswith(".h5"):
-                continue
-            fn = posixpath.basename(p)
-            sid = self._sample_id(fn)
-            rel = p[len(root):].lstrip("/") if p.startswith(root) else fn
-            grouped.setdefault(sid, []).append(rel)
+        prefixes = [f"{root}/{s}" for s in self.subfolders] or [root]
+        for prefix in prefixes:
+            for p in fs.find(prefix):
+                if not p.endswith(".h5"):
+                    continue
+                fn = posixpath.basename(p)
+                sid = self._sample_id(fn)
+                # stored relative to the REPO root (not the subfolder), so
+                # open()/_download() can build one URL regardless of which
+                # folder the file came from
+                rel = p[len(root):].lstrip("/") if p.startswith(root) else fn
+                grouped.setdefault(sid, []).append(rel)
         found = {
             sid: Sample(sid, self._order(paths), "hf")
             for sid, paths in grouped.items()

@@ -77,9 +77,16 @@ troubleshooting section, in
    | --- | --- |
    | `AURORA_BACKEND` | `hf` |
    | `AURORA_HF_REPO` | `AURORAData/AURORA_prediction` |
-   | `AURORA_HF_SUBFOLDER` | `predictions_7um_28um/TCGA_LUAD` |
-   | `AURORA_HE_REPO` | *(optional)* dataset repo holding the H&E images |
+   | `AURORA_HF_SUBFOLDER` | `TCGA_LUAD_website,predictions_7um_28um/TCGA_LUAD` |
+   | `AURORA_HE_REPO` | `AURORAData/AURORA_prediction` |
+   | `AURORA_HE_SUBFOLDER` | `HE_image_website` |
+   | `AURORA_DEFAULT_SAMPLE` | `TCGA-44-5645-01B-04-BS4` |
    | `AURORA_PREFETCH` | `1` — strongly recommended, see below |
+
+   `AURORA_HF_SUBFOLDER` accepts **comma-separated folders**: the LUAD
+   predictions are split, with the 112 um files in `TCGA_LUAD_website` and the
+   7/28 um files in `predictions_7um_28um/TCGA_LUAD`, and the viewer merges them
+   by sample id.
 
    Add `HF_TOKEN` as a **secret** only if a repo is private or gated.
    `AURORA_HF_REVISION` pins a branch/tag/commit; `AURORA_HF_BLOCK` tunes the
@@ -184,8 +191,9 @@ are the quantisation maxima, needed only to recover absolute values (range
 
 `gene-names.txt` (3026 entries) is stale: it also lists the 10 cell types and
 marker genes such as `MKI67` and `PDCD1` that are not in the predictions. The
-viewer builds its gene list from the H5 files instead, so the dropdown only ever
-offers genes that exist.
+gene picker loads its list from `space/static/LUAD_gene.csv`, and any gene that a
+loaded sample's H5 does not contain is shown dimmed and cannot be selected — so
+the viewer never offers a gene it cannot render.
 
 ---
 

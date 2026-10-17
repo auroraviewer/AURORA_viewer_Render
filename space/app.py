@@ -44,6 +44,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(HERE, "static")
 REPO_ROOT = os.path.dirname(HERE)
 
+# The sample the viewer opens on load.  Overridable so a deployment can point at
+# a different specimen without touching the frontend.
+DEFAULT_SAMPLE = os.environ.get("AURORA_DEFAULT_SAMPLE", "TCGA-44-5645-01B-04-BS4")
+
 log = logging.getLogger("aurora")
 
 
@@ -181,7 +185,10 @@ def list_samples(q: str | None = None):
     if q:
         ql = q.lower()
         out = [s for s in out if ql in s["sample_id"].lower()]
-    return {"count": len(out), "samples": out}
+    ids = [s["sample_id"] for s in out]
+    # the sample the UI should open first; falls back to the first listed one
+    default = DEFAULT_SAMPLE if DEFAULT_SAMPLE in ids else (ids[0] if ids else None)
+    return {"count": len(out), "samples": out, "default": default}
 
 
 @app.post("/api/refresh")

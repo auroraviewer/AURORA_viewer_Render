@@ -22,9 +22,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Hugging Face Spaces routes to app_port; anything that binds 0.0.0.0 works.
+# The LUAD predictions are split across two folders in the dataset repo (112 um
+# in TCGA_LUAD_website, 7/28 um in predictions_7um_28um/TCGA_LUAD), so the
+# subfolder list is comma-separated.  The H&E pyramids live in HE_image_website.
 ENV AURORA_BACKEND=hf \
     AURORA_HF_REPO=AURORAData/AURORA_prediction \
-    AURORA_HF_SUBFOLDER=predictions_7um_28um/TCGA_LUAD \
+    AURORA_HF_SUBFOLDER=TCGA_LUAD_website,predictions_7um_28um/TCGA_LUAD \
+    AURORA_HE_REPO=AURORAData/AURORA_prediction \
+    AURORA_HE_SUBFOLDER=HE_image_website \
+    AURORA_DEFAULT_SAMPLE=TCGA-44-5645-01B-04-BS4 \
+    AURORA_PREFETCH=1 \
     PORT=7860
 
 EXPOSE 7860

@@ -17,18 +17,19 @@ services:
       - key: AURORA_BACKEND
         value: hf
       - key: AURORA_HF_REPO
-        value: AURORAData/AURORA_Viewer_test
-      # empty on purpose: it overrides the Dockerfile default so the viewer
-      # discovers both predictions_7um_28um/ and predictions_112um/ recursively
+        value: AURORAData/AURORA_prediction
+      # the LUAD predictions live in two folders, so the list is comma-separated
       - key: AURORA_HF_SUBFOLDER
-        value: ""
+        value: TCGA_LUAD_website,predictions_7um_28um/TCGA_LUAD
       - key: AURORA_HE_REPO
-        value: AURORAData/AURORA_Viewer_test
+        value: AURORAData/AURORA_prediction
       - key: AURORA_HE_SUBFOLDER
-        value: HE_image
+        value: HE_image_website
+      - key: AURORA_DEFAULT_SAMPLE
+        value: TCGA-44-5645-01B-04-BS4
       # Prefetch downloads each sample once so views after the first are fast.
       # On the free tier the disk is ephemeral and wiped on sleep, so this
-      # re-downloads ~1.8 GB after each wake.  If you hit disk-full errors, set
-      # this to 0 (stream from HF instead; the first gene of a cold view is slow).
+      # re-downloads the sample after each wake.  If you hit disk-full errors,
+      # set this to 0 (stream from HF instead; the first gene is then slower).
       - key: AURORA_PREFETCH
         value: "1"

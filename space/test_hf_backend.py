@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for the Hugging Face backend of SampleStore.
 
 Network access is stubbed, so these pin the contract rather than the Hub: repo
@@ -77,11 +77,23 @@ check("sample ids strip the schema suffix",
       ids == ["TCGA-05-4244-01A-01-BS1", "TCGA-44-2668-01A-01-TS1"], ids)
 
 s = store.get("TCGA-44-2668-01A-01-TS1")
-check("a sample merging two files exposes both", sorted(s.paths) == sorted([HIGHRES, COARSE]),
+check("a sample merging two files exposes both",
+      sorted(s.paths) == sorted([f"{SUBFOLDER}/{HIGHRES}", f"{SUBFOLDER}/{COARSE}"]),
       s.paths)
-check("the highres file is the primary path", s.path == HIGHRES, s.path)
+check("the highres file is the primary path", s.path == f"{SUBFOLDER}/{HIGHRES}", s.path)
 check("kind reports highres", s.kind == "highres", s.kind)
 check("backend is hf", s.backend == "hf", s.backend)
+
+# comma-separated subfolders: both folders are searched and the paths stay
+# relative to the repo root, so one URL format works for every file
+multi = SampleStore(backend="hf", repo_id=REPO,
+                    subfolder=f"{SUBFOLDER},other_folder", block_size=4 << 20)
+multi._fs = FakeFS(paths)
+nm = multi.refresh()
+check("comma-separated subfolders search every folder", nm == 3, nm)
+m = multi.get("TCGA-44-2668-01A-01-TS1")
+check("paths stay repo-relative across folders",
+      all(p.startswith(SUBFOLDER + "/") for p in m.paths), m.paths)
 
 single = store.get("TCGA-05-4244-01A-01-BS1")
 check("a single-file sample has one path", len(single.paths) == 1, single.paths)
