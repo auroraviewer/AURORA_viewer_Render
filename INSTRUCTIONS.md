@@ -104,6 +104,7 @@ $env:AURORA_HF_SUBFOLDER = "TCGA_LUAD_website,predictions_7um_28um/TCGA_LUAD"
 $env:AURORA_HE_REPO = "AURORAData/AURORA_prediction"
 $env:AURORA_HE_SUBFOLDER = "HE_image_website"
 $env:AURORA_DEFAULT_SAMPLE = "TCGA-44-5645-01B-04-BS4"
+$env:AURORA_DEFAULT_GENE = "EPCAM"   # gene preselected when the sample has it
 $env:AURORA_PREFETCH = "1"          # download each sample once, then serve locally
 $env:HF_TOKEN = "hf_..."            # only for private/gated repos
 python -m uvicorn app:app --port 7860

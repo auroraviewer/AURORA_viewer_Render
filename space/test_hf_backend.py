@@ -185,6 +185,10 @@ try:
         check("download writes the file into the cache dir",
               os.path.exists(path) and path.startswith(store2.cache_dir), path)
         check("download reports bytes received", job2.downloaded == 10, job2.downloaded)
+        check("download reports per-file progress",
+              job2.file_total == 10 and job2.file_downloaded == 10
+              and job2.current == os.path.basename(sample.paths[0]),
+              job2.as_dict())
         # a second call is a no-op that still accounts for the bytes
         before = job2.downloaded
         store2._download(sample, sample.paths[0], job2)
@@ -192,6 +196,13 @@ try:
               job2.downloaded > before, (before, job2.downloaded))
     finally:
         requests.get = real_get
+
+    # the UI must not wait on a bar when prefetch is off
+    store_np, _ = make_store(paths, local_dir=None)
+    store_np.prefetch = False
+    store_np.refresh()
+    st = store_np.prefetch_status("TCGA-44-2668-01A-01-TS1")
+    check("prefetch reports disabled when streaming", st["state"] == "disabled", st)
 finally:
     shutil.rmtree(store2.cache_dir, ignore_errors=True)
 

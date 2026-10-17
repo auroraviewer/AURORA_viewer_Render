@@ -27,6 +27,8 @@ services:
         value: HE_image_website
       - key: AURORA_DEFAULT_SAMPLE
         value: TCGA-44-5645-01B-04-BS4
+      - key: AURORA_DEFAULT_GENE
+        value: EPCAM
       # Prefetch downloads each sample once so views after the first are fast.
       # On the free tier the disk is ephemeral and wiped on sleep, so this
       # re-downloads the sample after each wake.  If you hit disk-full errors,

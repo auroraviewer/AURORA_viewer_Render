@@ -81,6 +81,7 @@ troubleshooting section, in
    | `AURORA_HE_REPO` | `AURORAData/AURORA_prediction` |
    | `AURORA_HE_SUBFOLDER` | `HE_image_website` |
    | `AURORA_DEFAULT_SAMPLE` | `TCGA-44-5645-01B-04-BS4` |
+   | `AURORA_DEFAULT_GENE` | `EPCAM` |
    | `AURORA_PREFETCH` | `1` — strongly recommended, see below |
 
    `AURORA_HF_SUBFOLDER` accepts **comma-separated folders**: the LUAD
@@ -110,6 +111,11 @@ troubleshooting section, in
 Pan by dragging, zoom with the wheel or a double-click to fit, `n`/`p` (or the
 arrow keys) to step through genes. The URL carries `#sample=...&gene=...&res=...`
 so a view can be linked or reloaded.
+
+The H&E panel carries a **scale bar** that updates with the zoom (the slide is
+0.5 µm per pixel, so the bar reads µm at fit zoom and switches to mm when zoomed
+out). The prediction panel's background is white, so "no patch" cells read as
+blank canvas rather than a dark hole.
 
 ---
 

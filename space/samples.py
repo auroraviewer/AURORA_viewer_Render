@@ -76,12 +76,26 @@ class PrefetchJob:
     error: str | None = None
     started: float = field(default_factory=time.time)
     finished: float | None = None
+    # per-file view, so the UI can show a monotonic bar: one sample is usually
+    # two files (7/28 um then 112 um) and the aggregate total is only known as
+    # each response starts
+    current: str = ""
+    files_total: int = 0
+    files_done: int = 0
+    file_downloaded: int = 0
+    file_total: int = 0
 
     @property
     def progress(self) -> float:
         if self.total <= 0:
             return 0.0
         return min(1.0, self.downloaded / self.total)
+
+    @property
+    def file_progress(self) -> float:
+        if self.file_total <= 0:
+            return 0.0
+        return min(1.0, self.file_downloaded / self.file_total)
 
     def as_dict(self) -> dict:
         return {
@@ -90,6 +104,12 @@ class PrefetchJob:
             "downloaded": self.downloaded,
             "total": self.total,
             "progress": round(self.progress, 4),
+            "current": self.current,
+            "files_total": self.files_total,
+            "files_done": self.files_done,
+            "file_downloaded": self.file_downloaded,
+            "file_total": self.file_total,
+            "file_progress": round(self.file_progress, 4),
             "path": self.path,
             "error": self.error,
             "elapsed": round((self.finished or time.time()) - self.started, 1),
@@ -263,27 +283,39 @@ class SampleStore:
         if s.backend == "local":
             return {"state": "done", "local": True, "path": s.path,
                     "total": s.size, "downloaded": s.size, "progress": 1.0}
+        if not self.prefetch:
+            # streaming mode: there is nothing to download up front, so the UI
+            # should go straight to the render instead of waiting on a bar
+            return {"state": "disabled", "local": False, "progress": 0.0,
+                    "files_total": len(s.paths)}
 
         job = self._jobs.get(sample_id)
         local = self._local_path(s.path)
         if os.path.exists(local) and job is None:
             size = os.path.getsize(local)
             return {"state": "done", "local": True, "path": local,
-                    "total": size, "downloaded": size, "progress": 1.0}
+                    "total": size, "downloaded": size, "progress": 1.0,
+                    "files_total": len(s.paths), "files_done": len(s.paths)}
         if job is None:
-            job = PrefetchJob(sample_id=sample_id, total=s.size)
+            job = PrefetchJob(sample_id=sample_id, total=s.size,
+                              files_total=len(s.paths))
             self._jobs[sample_id] = job
             threading.Thread(target=self._download_all, args=(s,), daemon=True).start()
         return job.as_dict()
 
     def _download_all(self, s: Sample):
-        """Download every file of a sample, tracking aggregate progress."""
-        job = self._jobs.setdefault(s.sample_id,
-                                    PrefetchJob(sample_id=s.sample_id, total=s.size))
+        """Download every file of a sample, tracking aggregate + per-file progress."""
+        job = self._jobs.setdefault(
+            s.sample_id,
+            PrefetchJob(sample_id=s.sample_id, total=s.size,
+                        files_total=len(s.paths)))
         job.state = "running"
+        job.files_total = len(s.paths)
         try:
-            for rel in s.paths:
+            for i, rel in enumerate(s.paths):
+                job.files_done = i
                 self._download(s, rel, job)
+                job.files_done = i + 1
             job.state = "done"
             job.path = self._local_path(s.path)
         except Exception as exc:
@@ -296,12 +328,20 @@ class SampleStore:
         import requests
 
         if job is None:
-            job = self._jobs.setdefault(s.sample_id,
-                                        PrefetchJob(sample_id=s.sample_id, total=s.size))
+            job = self._jobs.setdefault(
+                s.sample_id,
+                PrefetchJob(sample_id=s.sample_id, total=s.size,
+                            files_total=len(s.paths)))
         os.makedirs(self.cache_dir, exist_ok=True)
         target = self._local_path(rel)
+        job.current = os.path.basename(rel)
+        job.file_downloaded = 0
+        job.file_total = 0
         if os.path.exists(target):
-            job.downloaded += os.path.getsize(target)
+            size = os.path.getsize(target)
+            job.downloaded += size
+            job.file_downloaded = size
+            job.file_total = size
             return target
         tmp = target + ".part"
         url = f"https://huggingface.co/datasets/{self.repo_id}/resolve/main/{rel}"
@@ -312,12 +352,15 @@ class SampleStore:
         try:
             with requests.get(url, stream=True, timeout=180, headers=headers) as r:
                 r.raise_for_status()
-                if not job.total:
-                    job.total = int(r.headers.get("content-length") or 0)
+                known = int(r.headers.get("content-length") or 0)
+                job.file_total = known
+                if known:
+                    job.total = job.downloaded + known
                 with open(tmp, "wb") as fh:
                     for chunk in r.iter_content(1 << 20):
                         fh.write(chunk)
                         job.downloaded += len(chunk)
+                        job.file_downloaded += len(chunk)
             os.replace(tmp, target)
             return target
         except Exception:

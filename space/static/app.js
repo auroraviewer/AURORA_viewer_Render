@@ -18,6 +18,7 @@
   var state = {
     sample: null,
     gene: null,
+    defaultGene: null,    // prefilled gene (EPCAM by default), from /api/samples
     catalog: [],          // gene list loaded from LUAD_gene.csv (fallback: H5 genes)
     cell: 14,
     cmap: 'turbo',
@@ -38,7 +39,8 @@
   // does nothing.
   var ids = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
              'geneField', 'resSeg', 'cmapSel', 'renderBtn', 'stage', 'warn28',
-             'heCanvas', 'predCanvas', 'spinner', 'loadMsg', 'status',
+             'heCanvas', 'predCanvas', 'spinner', 'loadMsg', 'loadText',
+             'loadBarWrap', 'loadBar', 'loadPct', 'status',
              'ramp', 'legendTitle', 'legendCaption', 'metaInfo', 'timingInfo',
              'backendInfo', 'heNote'];
 
@@ -57,11 +59,99 @@
   function busy(on, msg) {
     els.spinner.style.display = on ? 'block' : 'none';
     if (on && msg) {
-      els.loadMsg.textContent = msg;
+      els.loadText.textContent = msg;
       els.loadMsg.style.display = 'block';
     } else {
       els.loadMsg.style.display = 'none';
     }
+    if (!on) showBar(null);
+  }
+
+  // ---- download progress bar -------------------------------------------
+  // `pct === null` hides the bar but leaves the warning message in place.
+  function showBar(pct, label) {
+    if (pct === null || pct === undefined) {
+      els.loadBarWrap.style.display = 'none';
+      els.loadPct.textContent = '';
+      return;
+    }
+    els.loadBarWrap.style.display = 'block';
+    els.loadBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    els.loadPct.textContent = label || (Math.round(pct) + '%');
+  }
+
+  function mb(n) {
+    return (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + ' MB';
+  }
+
+  function barLabel(st) {
+    var bits = [];
+    if (st.current) bits.push('Downloading ' + st.current);
+    if (st.files_total > 1) {
+      bits.push('file ' + Math.min(st.files_done + 1, st.files_total)
+        + ' of ' + st.files_total);
+    }
+    var s = bits.join(' \u00b7 ');
+    if (st.file_total > 0) {
+      s += (s ? ' \u2014 ' : '') + Math.round(st.file_progress * 100) + '% ('
+        + mb(st.file_downloaded) + ' / ' + mb(st.file_total) + ')';
+    } else if (st.file_downloaded > 0) {
+      s += (s ? ' \u2014 ' : '') + mb(st.file_downloaded);
+    }
+    return s;
+  }
+
+  /**
+   * Ask the server to cache the sample locally and follow the download.
+   *
+   * Resolves when the files are on disk (or prefetch is disabled/not needed), so
+   * the caller can then request the metadata without blocking on a download.
+   */
+  function ensureSampleLocal(id) {
+    var url = '/api/samples/' + encodeURIComponent(id) + '/prefetch';
+    var token = state.loadToken;          // ignore polls from an abandoned load
+    function alive() { return token === state.loadToken; }
+    function poll() {
+      return fetch(url, { method: 'POST' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    }
+    return poll().then(function (st) {
+      if (!alive()) return;
+      if (st.state !== 'running' && st.state !== 'pending') {
+        showBar(null);
+        if (st.state === 'error') {
+          status('Download failed: ' + (st.error || 'unknown error'), true);
+        }
+        return;
+      }
+      showBar(st.file_progress * 100, barLabel(st));
+      return new Promise(function (resolve) {
+        var timer = setInterval(function () {
+          if (!alive()) { clearInterval(timer); resolve(); return; }
+          poll().then(function (s2) {
+            if (!alive()) { clearInterval(timer); resolve(); return; }
+            if (s2.state === 'running' || s2.state === 'pending') {
+              showBar(s2.file_progress * 100, barLabel(s2));
+              return;
+            }
+            clearInterval(timer);
+            showBar(null);
+            if (s2.state === 'error') {
+              status('Download failed: ' + (s2.error || 'unknown error'), true);
+            }
+            resolve();
+          }).catch(function () {
+            clearInterval(timer);
+            if (alive()) showBar(null);
+            resolve();          // let /meta report the real problem
+          });
+        }, 700);
+      });
+    }).catch(function () {
+      if (alive()) showBar(null);   // prefetch unavailable: just load
+    });
   }
   // ---- gene catalog -----------------------------------------------------
   function parseGeneCSV(text) {
@@ -135,7 +225,10 @@
     var ctx = cv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = state.camera.scale < 1;
-    ctx.fillStyle = '#000';
+    // The prediction raster is transparent where there is no patch, so the panel
+    // background IS the "no data" colour.  White matches the reference figures;
+    // the H&E keeps a dark matte so the slide's own white glass stands out.
+    ctx.fillStyle = isHE ? '#000' : '#ffffff';
     ctx.fillRect(0, 0, cv.width, cv.height);
 
     if (isHE && !bmp) {
@@ -163,6 +256,7 @@
       var hw = state.heInfo.width * cam.scale;
       var hh = state.heInfo.height * cam.scale;
       ctx.drawImage(bmp, cam.tx, cam.ty, hw, hh);
+      drawScaleBar(ctx, s, cam);
     } else if (state.predRect) {
       // The prediction is placed at its reported origin and extent, so a layer
       // starting at a negative coordinate or narrower than the image lands
@@ -181,6 +275,62 @@
       ctx.drawImage(bmp, px, py, pw, ph);
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ---------------------------------------------------- scale bar
+  // The H&E (and the prediction grid) are in 0.5 um/pixel coordinates: the L0
+  // rescaled slide is 0.5 um/px, and every coordinate in the prediction files is
+  // in pixels of that same image.  So on screen, one CSS pixel spans
+  // 0.5 / camera.scale microns.
+  var UM_PER_WORLD_PX = 0.5;
+  var NICE_UM = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+
+  function scaleBarSpan(camScale, wantPx) {
+    // returns {um, px, label} for a bar of roughly `wantPx` screen pixels
+    if (!(camScale > 0)) return null;
+    var umPerPx = UM_PER_WORLD_PX / camScale;
+    var targetUm = umPerPx * wantPx;
+    var um = NICE_UM[0];
+    for (var i = 0; i < NICE_UM.length; i++) {
+      if (NICE_UM[i] <= targetUm) um = NICE_UM[i];
+    }
+    var px = um / umPerPx;
+    if (!isFinite(px) || px <= 0) return null;
+    var label = um >= 1000 ? (um / 1000) + ' mm' : um + ' \u00b5m';
+    return { um: um, px: px, label: label, umPerPx: umPerPx };
+  }
+
+  function drawScaleBar(ctx, s, cam) {
+    var want = Math.max(80, Math.min(170, s.w * 0.16));
+    var bar = scaleBarSpan(cam.scale, want);
+    if (!bar) return;
+    var x0 = 16;
+    // kept clear of the transient status chip, which also lives bottom-left
+    var y0 = s.h - 78;                    // bar baseline
+    var w = bar.px;
+    // outlined bar: readable on dark tissue and on white glass alike
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x0, y0 - 2, w, 4);
+    ctx.strokeStyle = 'rgba(0,0,0,.85)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + 0.5, y0 - 2.5, Math.max(1, w - 1), 5);
+    // end ticks
+    ctx.beginPath();
+    ctx.moveTo(x0 + 0.5, y0 - 7); ctx.lineTo(x0 + 0.5, y0 + 3);
+    ctx.moveTo(x0 + Math.max(1, w - 0.5), y0 - 7);
+    ctx.lineTo(x0 + Math.max(1, w - 0.5), y0 + 3);
+    ctx.stroke();
+    // label on a dark chip so it reads over any tissue
+    ctx.font = '12px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    var tw = ctx.measureText(bar.label).width || 40;
+    ctx.fillStyle = 'rgba(13,15,20,.82)';
+    ctx.fillRect(x0 - 6, y0 - 28, tw + 12, 18);
+    ctx.fillStyle = '#eef1f6';
+    ctx.fillText(bar.label, x0, y0 - 19);
+    ctx.textBaseline = 'alphabetic';
+    state.lastScaleBar = bar;
   }
 
   // ---------------------------------------------------- interaction
@@ -287,6 +437,7 @@
         els.sampleSel.appendChild(o);
       });
       var h = readHash();
+      state.defaultGene = d.default_gene || null;
       var want = (h.sample && d.samples.some(function (s) { return s.sample_id === h.sample; }))
         ? h.sample
         : (d.default && d.samples.some(function (s) { return s.sample_id === d.default; })
@@ -298,11 +449,16 @@
 
   function selectSample(id, restore) {
     state.sample = id;
+    state.loadToken = (state.loadToken || 0) + 1;   // cancels any older poll
+    // the warning stays visible for the whole download; the bar is filled in by
+    // ensureSampleLocal() as bytes arrive
     busy(true, 'Loading sample data \u2014 the first load downloads it from '
       + 'Hugging Face and can take a minute or two. After that, switching genes '
       + 'and resolutions is fast.');
     status('Reading ' + id + '\u2026');
-    return api('/api/samples/' + encodeURIComponent(id) + '/meta').then(function (m) {
+    return ensureSampleLocal(id).then(function () {
+      return api('/api/samples/' + encodeURIComponent(id) + '/meta');
+    }).then(function (m) {
       state.meta = m;
       els.geneListBox.style.display = 'none';
 
@@ -323,7 +479,10 @@
       updateWarn28();
 
       var gene = (restore && restore.gene && inSample(restore.gene))
-        ? restore.gene : (availGenes()[0] || m.genes[0]);
+        ? restore.gene
+        : (state.defaultGene && inSample(state.defaultGene)
+            ? state.defaultGene
+            : (availGenes()[0] || m.genes[0]));
       els.geneSearch.value = gene;
       state.gene = gene;
       if (restore && restore.cmap) { state.cmap = restore.cmap; els.cmapSel.value = restore.cmap; }

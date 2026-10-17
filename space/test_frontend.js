@@ -40,7 +40,8 @@ try {
 const IDS = ['sampleSel', 'geneSearch', 'geneBtn', 'geneListBox',
              'geneField', 'resSeg', 'cmapSel',
              'renderBtn', 'stage', 'warn28', 'heCanvas', 'predCanvas', 'spinner',
-             'loadMsg', 'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
+             'loadMsg', 'loadText', 'loadBarWrap', 'loadBar', 'loadPct',
+             'status', 'ramp', 'legendTitle', 'legendCaption', 'metaInfo',
              'timingInfo', 'backendInfo', 'heNote'];
 const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
 for (const id of IDS) {
@@ -66,6 +67,33 @@ check('no hatch or quality overlay is drawn any more',
   appSrc.indexOf('buildHatch') < 0 && appSrc.indexOf('qualityWarn') < 0);
 check('cell types are not offered (the prop decode overflows the tiny host)',
   appSrc.indexOf('celltype') < 0 && appSrc.indexOf('kindSel') < 0);
+check('the prediction panel background is white, the H&E matte stays dark',
+  /fillStyle = isHE \? '#000' : '#ffffff'/.test(appSrc));
+check('a scale bar is drawn on the H&E panel from the 0.5 um/px grid',
+  appSrc.indexOf('drawScaleBar(') >= 0 &&
+  appSrc.indexOf('UM_PER_WORLD_PX = 0.5') >= 0);
+
+// ---- scale bar math (mirrors scaleBarSpan in app.js) -----------------------
+const NICE_UM = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+function scaleBarSpan(camScale, wantPx) {
+  if (!(camScale > 0)) return null;
+  const umPerPx = 0.5 / camScale;
+  const targetUm = umPerPx * wantPx;
+  let um = NICE_UM[0];
+  for (const n of NICE_UM) if (n <= targetUm) um = n;
+  return { um, px: um / umPerPx, umPerPx };
+}
+{
+  const fit = scaleBarSpan(800 / 8613, 140);      // whole LUAD slide in an 800 px panel
+  check('scale bar picks a round length at fit zoom',
+    fit && fit.um === 500, fit && `${fit.um} um = ${fit.px.toFixed(0)} px`);
+  const zoom = scaleBarSpan(10 * (800 / 8613), 140);   // 10x zoomed in
+  check('scale bar stays a readable length when zoomed',
+    zoom && zoom.um === 50 && Math.abs(zoom.px - fit.px) < 2,
+    zoom && `${zoom.um} um = ${zoom.px.toFixed(0)} px`);
+  check('scale bar knows 0.5 um per world pixel',
+    Math.abs(fit.umPerPx * (800 / 8613) - 0.5) < 1e-9);
+}
 
 // ---- reproduce buildValues on synthetic data ------------------------------
 // RGB, as the server sends it: R = value code, B = presence.

@@ -198,6 +198,7 @@ real images are to hand.
 | `AURORA_HF_REPO` | Hugging Face **dataset** repo holding the predictions |
 | `AURORA_HF_SUBFOLDER` | folder(s) inside that repo — **comma-separated** for more than one |
 | `AURORA_DEFAULT_SAMPLE` | sample the UI opens on load (default `TCGA-44-5645-01B-04-BS4`) |
+| `AURORA_DEFAULT_GENE` | gene preselector (default `EPCAM`) |
 | `AURORA_PREFETCH` | `1` downloads each sample once, then serves it locally |
 | `AURORA_HE_DIR` | folder scanned recursively for `<sample_id>[suffix][ext]` |
 | `AURORA_HE_REPO` | Hugging Face **dataset** repo to fetch images from |
@@ -292,8 +293,10 @@ round-trips through the server. The channels are:
 | `B` | presence: 255 where a patch exists, 0 where there is none |
 
 Presence is what makes "no patch" transparent: without it the client cannot tell
-background from a legitimate expression of 0, and the raster is drawn as a
-rectangle of near-black over the whole image. Values are drawn exactly as stored —
+background from a legitimate expression of 0. The prediction panel is painted
+**white**, so those cells read as blank canvas (matching the reference figures)
+while a present cell with value 0 draws the colormap's low colour. Values are
+drawn exactly as stored —
 nothing is masked, hatched or annotated.
 
 ## Tests

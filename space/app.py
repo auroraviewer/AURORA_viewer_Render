@@ -48,6 +48,10 @@ REPO_ROOT = os.path.dirname(HERE)
 # a different specimen without touching the frontend.
 DEFAULT_SAMPLE = os.environ.get("AURORA_DEFAULT_SAMPLE", "TCGA-44-5645-01B-04-BS4")
 
+# The gene the viewer preselects.  Only used when the loaded sample actually has
+# it; otherwise the first available gene is used.
+DEFAULT_GENE = os.environ.get("AURORA_DEFAULT_GENE", "EPCAM")
+
 log = logging.getLogger("aurora")
 
 
@@ -188,7 +192,8 @@ def list_samples(q: str | None = None):
     ids = [s["sample_id"] for s in out]
     # the sample the UI should open first; falls back to the first listed one
     default = DEFAULT_SAMPLE if DEFAULT_SAMPLE in ids else (ids[0] if ids else None)
-    return {"count": len(out), "samples": out, "default": default}
+    return {"count": len(out), "samples": out, "default": default,
+            "default_gene": DEFAULT_GENE}
 
 
 @app.post("/api/refresh")
